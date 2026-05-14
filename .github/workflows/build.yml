@@ -13,15 +13,21 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Determine version
         id: version
+        env:
+          UPSTREAM_VERSION: ${{ github.event.inputs.upstream_version }}
         run: |
-          if [ -n "${{ github.event.inputs.upstream_version }}" ]; then
-            VERSION="${{ github.event.inputs.upstream_version }}"
+          if [ -n "$UPSTREAM_VERSION" ]; then
+            VERSION="$UPSTREAM_VERSION"
           else
             # Fetch the latest release tag from GitHub
             VERSION=$(curl -s "https://api.github.com/repos/JustinIven/smtp-oauth-relay/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
@@ -34,8 +40,9 @@ jobs:
           echo "Determined version: $VERSION"
 
       - name: Fetch upstream source
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           echo "Fetching version: $VERSION"
           git clone --depth 1 --branch "$VERSION" https://github.com/JustinIven/smtp-oauth-relay.git upstream
           cp Dockerfile upstream/
