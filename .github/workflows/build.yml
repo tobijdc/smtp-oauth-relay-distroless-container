@@ -1,0 +1,71 @@
+name: Build Docker Image
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      upstream_version:
+        description: 'Upstream tag or branch to build (e.g. v0.3.0 or main)'
+        required: false
+        default: 'main'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v6
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.upstream_version }}" ]; then
+            VERSION="${{ github.event.inputs.upstream_version }}"
+          else
+            # Fetch the latest release tag from GitHub
+            VERSION=$(curl -s "https://api.github.com/repos/JustinIven/smtp-oauth-relay/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+            if [ -z "$VERSION" ]; then
+              echo "Warning: Could not find latest release, falling back to 'main'"
+              VERSION="main"
+            fi
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Determined version: $VERSION"
+
+      - name: Fetch upstream source
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "Fetching version: $VERSION"
+          git clone --depth 1 --branch "$VERSION" https://github.com/JustinIven/smtp-oauth-relay.git upstream
+          cp Dockerfile upstream/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./upstream
+          file: ./upstream/Dockerfile
+          tags: ${{ secrets.DOCKER_USERNAME }}/smtp-oauth-relay-distroless:${{ steps.version.outputs.version }}
+          push: false
+          load: true
+
+      - name: Verify image
+        run: |
+          docker images smtp-oauth-relay-distroless
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./upstream
+          file: ./upstream/Dockerfile
+          tags: ${{ secrets.DOCKER_USERNAME }}/smtp-oauth-relay-distroless:${{ steps.version.outputs.version }}
+          push: true
