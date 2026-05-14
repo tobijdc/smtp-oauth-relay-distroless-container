@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM python:3.13.13-slim-trixie AS build-env
+FROM python:3.14.5-slim-trixie AS build-env
 
 # Set the working directory in the container
 WORKDIR /usr/src/smtp-relay/
